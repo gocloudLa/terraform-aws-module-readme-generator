@@ -7,7 +7,7 @@ on:
 
 jobs:
   generate-readme:
-    uses: gocloudLa/.github/.github/workflows/generate-readme.yml@main
+    uses: gocloudLa/.github/.github/workflows/readme-generator.yml@main
     with:
       readme_yaml: .github/readme/README.yaml
       external_modules: .github/readme/external_modules.json
