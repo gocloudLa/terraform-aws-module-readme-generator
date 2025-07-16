@@ -3,6 +3,7 @@ name: Readme Generator
 on:
   schedule:
     - cron: '*/10 * * * *'
+  workflow_dispatch:
 
 jobs:
   generate-readme:
