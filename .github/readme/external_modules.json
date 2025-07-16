@@ -1,0 +1,17 @@
+[
+  {
+    "name": "terraform-aws-modules/rds-aurora/aws",
+    "url": "https://github.com/terraform-aws-modules/terraform-aws-rds-aurora",
+    "version": "9.9.1"
+  },
+  {
+    "name": "terraform-aws-modules/security-group/aws",
+    "url": "https://github.com/terraform-aws-modules/terraform-aws-security-group",
+    "version": "~> 4.0"
+  },
+  {
+    "name": "terraform-aws-modules/lambda/aws",
+    "url": "https://github.com/terraform-aws-modules/terraform-aws-lambda",
+    "version": "4.7.1"
+  }
+] 

@@ -1,0 +1,70 @@
+module_name: "Wrapper RDS Aurora"
+module_description: "A comprehensive Terraform module for provisioning and managing Amazon RDS Aurora clusters with advanced features including database management, automated backups, DNS integration, and security configurations."
+quick_start: |
+  ```hcl
+  module "wrapper_rds_aurora" {
+    source = "../../"
+    # ...
+  }
+  ```
+features:
+  - icon: "🗄️"
+    title: "Database Management"
+    short_description: "Automated database and user management with MySQL and PostgreSQL support, credentials stored in Parameter Store"
+    long_description: |
+      Deploys a Lambda function that manages the creation and modification of *Users*, *Databases* and their access permissions.
+      Access credentials are stored in **Parameter Store**.
+      Sends notifications of completed operations.
+      **Important**: Does not perform deletion of databases or users - users will remain without permissions on resources.
+    examples:
+      - title: "MySQL / MariaDB Code"
+        code: |
+          ```hcl
+          rds_aurora_parameters = {
+            "mysql-00" = {
+              enable_db_management                    = true
+              enable_db_management_logs_notifications = true
+              db_management_parameters = {
+                databases = [
+                  # ...
+                ],
+                users = [
+                  # ...
+                ],
+                excluded_users = ["rdsadmin", "root", "mariadb.sys", "healthcheck"]
+              }
+            }
+          }
+          ```
+      - title: "PostgreSQL Code"
+        code: |
+          ```hcl
+          rds_aurora_parameters = {
+            "postgresql-00" = {
+              enable_db_management                    = true
+              enable_db_management_logs_notifications = true
+              db_management_parameters = {
+                databases = [
+                  # ...
+                ],
+                users = [
+                  # ...
+                ],
+                excluded_users = ["rdsadmin", "root", "healthcheck"]
+              }
+            }
+          }
+          ```
+# variables_table: |
+#   | Variable | Description | Type | Default | Required |
+#   |----------|-------------|------|---------|----------|
+#   | ...      | ...         | ...  | ...     | ...      |
+# outputs_table: |
+#   | Output | Description |
+#   |--------|-------------|
+#   | ...    | ...         |
+examples: |
+  - **Complete Example**: Full implementation with MySQL and PostgreSQL clusters, including database management, backups, DNS records, and security configurations
+important_warnings: |
+  - **🚨 Restart Engine**: Restart the engine during parameter group changes - set `apply_immediately = true`
+  - **🌐 Public Access**: Exposes the resource to the internet - use `publicly_accessible = true` with caution 
