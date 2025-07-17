@@ -197,14 +197,23 @@ features:
             }
           }
           ```
-# variables_table: |
-#   | Variable | Description | Type | Default | Required |
-#   |----------|-------------|------|---------|----------|
-#   | ...      | ...         | ...  | ...     | ...      |
-# outputs_table: |
-#   | Output | Description |
-#   |--------|-------------|
-#   | ...    | ...         |
+variables_plain: |
+  | instance_class  | string | db.t3.micro | Tipo de instancia para la base     |
+  | allocated_storage | number | 20         | Almacenamiento asignado (GB)       |
+
+variables_yaml:
+  - name: "instance_classYAML"
+    type: "string"
+    default: "db.t3.micro"
+    description: "Tipo de instancia para la base de datos"
+  - name: "allocated_storageYAML"
+    type: "number"
+    default: 20
+    description: "Cantidad de almacenamiento asignado (GB)"
+outputs_table: |
+  | Output | Description |
+  |--------|-------------|
+  | ...    | ...         |
 examples: |
   - **Complete Example**: Full implementation with MySQL and PostgreSQL clusters, including database management, backups, DNS records, and security configurations
 important_warnings: |
