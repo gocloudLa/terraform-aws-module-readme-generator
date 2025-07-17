@@ -23,12 +23,11 @@ A comprehensive Terraform module for provisioning and managing Amazon RDS Aurora
 
 
 ### 🔗 External Modules
-
-- [terraform-aws-modules/rds-aurora/aws](https://github.com/terraform-aws-modules/terraform-aws-rds-aurora) version 9.9.1
-
-- [terraform-aws-modules/security-group/aws](https://github.com/terraform-aws-modules/terraform-aws-security-group) version ~> 4.0
-
-- [terraform-aws-modules/lambda/aws](https://github.com/terraform-aws-modules/terraform-aws-lambda) version 4.7.1
+| Name | Version |
+|------|------:|
+| [terraform-aws-modules/rds-aurora/aws](https://github.com/terraform-aws-modules/terraform-aws-rds-aurora) | 9.9.1 |
+| [terraform-aws-modules/security-group/aws](https://github.com/terraform-aws-modules/terraform-aws-security-group) | ~> 4.0 |
+| [terraform-aws-modules/lambda/aws](https://github.com/terraform-aws-modules/terraform-aws-lambda) | 4.7.1 |
 
 
 
