@@ -240,6 +240,23 @@ rds_parameters = {
 
 
 
+## 📑 Variables
+| Name | Type | Default | Description |
+|------|------|---------|-------------|
+| instance_class  | string | db.t3.micro | Tipo de instancia para la base     |
+| allocated_storage | number | 20         | Almacenamiento asignado (GB)       |
+
+
+| instance_classYAML | string | db.t3.micro | Tipo de instancia para la base de datos |
+| allocated_storageYAML | number | 20 | Cantidad de almacenamiento asignado (GB) |
+
+
+
+
+## 📤 Outputs
+| Output | Description |
+|--------|-------------|
+| ...    | ...         |
 
 
 
