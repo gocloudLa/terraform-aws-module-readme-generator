@@ -197,10 +197,10 @@ features:
             }
           }
           ```
-variables_plain: |
+inputs_plain: |
   | instance_class    | Tipo de instancia para la base de datos | string | db.t3.micro | no |
   | allocated_storage | Almacenamiento asignado (GB)            | number | 20          | no |
-variables_yaml:
+inputs_yaml:
   - name: "instance_classYAML"
     description: "Tipo de instancia para la base de datos"
     type: "string"
