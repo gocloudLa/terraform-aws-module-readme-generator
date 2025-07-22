@@ -1,5 +1,5 @@
-module_name: "Wrapper RDS Aurora"
-module_description: "A comprehensive Terraform module for provisioning and managing Amazon RDS Aurora clusters with advanced features including database management, automated backups, DNS integration, and security configurations."
+module_name: Terraform RDS Module
+module_description: The Terraform wrapper for RDS simplifies the configuration of the Relational Database Service in the AWS cloud. This wrapper functions as a predefined template, facilitating the creation and management of RDS instances by handling all the technical details.
 quick_start: |
   ```hcl
   rds_parameters = {
@@ -50,20 +50,20 @@ quick_start: |
       #performance_insights_retention_period  = 7
     }
   }
-
+  
   rds_defaults = var.rds_defaults
   ```
 features:
-  - icon: "🗄️"
-    title: "Database Management"
-    short_description: "Automated database and user management with MySQL and PostgreSQL support, credentials stored in Parameter Store"
+  - icon: 🔐
+    title: User and Database Management
+    short_description: Manages users, databases, and access with credential storage and notifications
     long_description: |
-      Deploys a Lambda function that manages the creation and modification of *Users*, *Databases* and their access permissions.
-      Access credentials are stored in **Parameter Store**.
-      Sends notifications of completed operations.
-      **Important**: Does not perform deletion of databases or users - users will remain without permissions on resources.
+      Deploy lambda function, which manages the creation and modification of *Users*, *Databases*, and their access to them.
+      The credentials for the accesses will be stored in a parameter of **Parameter Store**.
+      Send notifications of the actions taken.
+      Does not remove databases or users; the latter will remain without permissions on the resources.
     examples:
-      - title: "MySQL / MariaDB Code"
+      - title: MySQL / MariaDB code
         code: |
           ```hcl
           rds_parameters = {
@@ -121,7 +121,7 @@ features:
             }
           }
           ```
-      - title: "PostgreSQL Code"
+      - title: PostgreSQL code
         code: |
           ```hcl
           rds_parameters = {
@@ -197,26 +197,199 @@ features:
             }
           }
           ```
-inputs_plain: |
-  | instance_class    | Tipo de instancia para la base de datos | string | db.t3.micro | no |
-  | allocated_storage | Almacenamiento asignado (GB)            | number | 20          | no |
-inputs_yaml:
-  - name: "instance_classYAML"
-    description: "Tipo de instancia para la base de datos"
-    type: "string"
-    default: "db.t3.micro"
-    required: "no"
-  - name: "allocated_storageYAML"
-    description: "Almacenamiento asignado (GB)"
-    type: "number"
-    default: 20
-    required: "no"
-# outputs_table: |
-#   | Output | Description |
-#   |--------|-------------|
-#   | ...    | ...         |
-examples: |
-  - **Complete Example**: Full implementation with MySQL and PostgreSQL clusters, including database management, backups, DNS records, and security configurations
-important_warnings: |
-  - **🚨 Restart Engine**: Restart the engine during parameter group changes - set `apply_immediately = true`
-  - **🌐 Public Access**: Exposes the resource to the internet - use `publicly_accessible = true` with caution 
+  - icon: 💾
+    title: Dump with S3
+    short_description: Creates SQL dump backups in S3 for MySQL, MariaDB, and PostgreSQL databases
+    long_description: |
+      This module creates the necessary resources to generate an SQL dump and store it in an S3 bucket, along with cleanup scripts for the database. <br/> It supports the database engines **MySQL**, **MariaDB**, and **PostgreSQL**.
+    examples:
+      - title: Configuration Code
+        code: |
+          ```hcl
+          rds_parameters = {
+            "00" = {
+              ...
+              enable_db_dump_create = true
+              db_dump_create_local_path_custom_scripts = "${path.module}/content/custom_sql"
+              db_dump_create_schedule_expression = "cron(0 * * * ? *)"
+              db_dump_create_db_name = "demo"
+              db_dump_create_retention_in_days = 7
+              db_dump_create_s3_arn_permission_accounts = [
+                "arn:aws:iam::xxxxxxxxxxx:root", # demo.la-dev
+                "arn:aws:iam::xxxxxxxxxxx:root", # demo.la-stg
+              ]
+              ...
+            }
+          }
+          ```
+  - icon: 💾
+    title: Restore with S3
+    short_description: Restores database from SQL dump and runs cleanup scripts
+    long_description: |
+      This module creates the necessary resources to perform a restore from an SQL dump stored in a bucket and execute the necessary cleanup scripts. <br/> It supports the database engines **MySQL**, **MariaDB**, and **PostgreSQL**
+    examples:
+      - title: Configuration Code
+        code: |
+          ```hcl
+          enable_db_dump_restore = true
+          db_dump_restore_s3_bucket_name = "demo-l04-core-00-db-dump-create"
+          db_dump_restore_db_name = "demo"
+          ```
+  - icon: 🔄
+    title: DB Reset
+    short_description: Deletes and recreates database, supporting MySQL, MariaDB, and PostgreSQL
+    long_description: |
+      This module deletes the database and recreates it, eliminating all data. It is intended to be used in development environments. <br/> It supports the database engines **MySQL**, **MariaDB**, and **PostgreSQL**.
+    examples:
+      - title: Configuration Code
+        code: |
+          ```hcl
+          enable_db_reset = true
+          ```
+  - icon: 🌐
+    title: DNS Record
+    short_description: Registers a CNAME DNS record in a Route53 hosted zone
+    long_description: |
+      Register a CNAME DNS record in a Route53 hosted zone that is present within the account, which can be public or private depending on the desired visibility type of the record.
+    examples:
+      - title: Configuration Code
+        code: |
+          ```hcl
+          dns_records = {
+            "" = {
+              # zone_name    = local.zone_private
+              # private_zone = true
+              zone_name    = local.zone_public
+              private_zone = false
+            }
+          }
+          ```
+  - icon: 🕰️
+    title: Enrollment of Point in Time Recovery
+    short_description: Enables Point in Time Recovery backup policy integration
+    long_description: |
+      This tag allows the resource to be added to a backup policy of the Point in Time Recovery type. It requires having the policy deployed with AWS Backups and the tag to be used.
+    examples:
+      - title: Configuration Code
+        code: |
+          ```hcl
+          tags = { ptr-14d = "true" }
+          ```
+important_notes: |
+  - **🚨 Restart Engine on Parameter Group Changes:** Automatically restart the engine when parameter group changes are applied.
+  - **🚨 Drop/Create Database:** Perform a drop and create operation on a database.
+  - **⚠️ Expose Resource to Internet:** Ensure resource is publicly accessible to internet users.
+  - **⚠️ Overwrite Database Data:** Allows overwriting data in a database.
+  - **ℹ️ Unlimited Storage Growth Enabled:** Enables unlimited storage growth for the database instance.
+input_table: |
+  | engine | Motor de base de datos | String | "mariadb" | no |
+  | engine_version | Version del motor deseada | String | "10.6.14" | no |
+  | instance_class | Tamaño del recurso | String | "db.t3.micro" | no |
+  | deletion_protection | Protección contra eliminación del recurso | Boleano | true | no |
+  | publicly_accessible | Habilita el acceso desde internet | Boleano | false | no |
+  | subnet_ids | Listado de subnets sobre los cuales se despliega el recurso | Lista | [] | no |
+  | subnet_name | Wildcard para encontrar las subnets en donde deployar motor y lambdas | String | `"${local.common_name_prefix}-private*"` | no |
+  | ingress_with_cidr_blocks | Reglas de entrada para el recurso | Array de Objetos | `[{ rule = "mysql-tcp", cidr_blocks = "172.1.0.0/16" }]` | no |
+  | allocated_storage | Almacenamiento mínimo de la instancia | Entero | 5 | no |
+  | max_allocated_storage | Almacenamiento máximo de la instancia | Entero | 10 | no |
+  | storage_type | Tipo de almacenamiento | string | null | yes |
+  | parameters | Definición de parámetros para Parameter Group | Array de Objetos | `[ {   name  = "max_connections, "value = "150" }    ]` | no |
+  | maintenance_window | Horario de ventana de mantenimiento | String | "Sun:04:00-Sun:06:00" | no |
+  | backup_window | Horario de ventana de Backup | String | "03:00-03:30" | no |
+  | backup_retention_period | Retención en dias de Backups | Entero | "7" | no |
+  | apply_immediately | Aplica inmediatamente cambios que puedan reiniciar el motor | Boleano | false | no |
+  | performance_insights_enabled | Habilitación de feature de Performance Insights | Boleano | false | no |
+  | performance_insights_retention_period | Retención de informacón de feature de Performance Insights | Entero | 7 | no |
+  | username | El nombre de usuario maestro de la base de datos. | string | root | no |
+  | password | La contraseña del usuario maestro generada por el recurso random password. | string | generada automáticamente | no |
+  | manage_master_user_password | Administra automáticamente la rotación de la contraseña del usuario maestro. | bool | false | no |
+  | master_user_secret_kms_key_id | ID de la clave KMS para cifrar el secreto del usuario maestro. | string | null | yes |
+  | manage_master_user_password_rotation | Activa la rotación automática de la contraseña del usuario maestro. | bool | false | no |
+  | master_user_password_rotate_immediately | Rota inmediatamente la contraseña del usuario maestro. | bool | null | yes |
+  | master_user_password_rotation_automatically_after_days | Número de días tras los cuales se rota automáticamente la contraseña. | number | null | yes |
+  | master_user_password_rotation_duration | Duración en días de la validez de la contraseña tras la rotación. | number | null | yes |
+  | master_user_password_rotation_schedule_expression | Expresión de programación para la rotación (ejemplo, cron). | string | null | yes |
+  | create_db_subnet_group | Indica si se debe crear un grupo de subredes para la base de datos. | bool | true | no |
+  | db_subnet_group_name | Nombre del grupo de subredes para la base de datos. | string | `${local.common_name}-${each.key}` | no |
+  | db_subnet_group_use_name_prefix | Usa un prefijo de nombre para el grupo de subredes. | bool | false | no |
+  | db_subnet_group_description | Descripción del grupo de subredes. | string | null | yes |
+  | db_subnet_group_tags | Etiquetas asignadas al grupo de subredes. | map | {} | no |
+  | create_db_parameter_group | Indica si se debe crear un grupo de parámetros para la base de datos. | bool | true | no |
+  | parameter_group_name | Nombre del grupo de parámetros para la base de datos. | string | `${local.common_name}-${each.key}` | no |
+  | parameter_group_use_name_prefix | Usa un prefijo de nombre para el grupo de parámetros. | bool | false | no |
+  | family | Familia de la base de datos para el grupo de parámetros. | string | mariadb10.6 | no |
+  | parameters | Lista de parámetros del grupo de parámetros. | list | [] | no |
+  | parameter_group_description | Descripción del grupo de parámetros. | string | null | yes |
+  | db_parameter_group_tags | Etiquetas asignadas al grupo de parámetros. | map | {} | no |
+  | create_db_option_group | Indica si se debe crear un grupo de opciones para la base de datos. | bool | true | no |
+  | option_group_name | Nombre del grupo de opciones para la base de datos. | string | `${local.common_name}-${each.key}` | no |
+  | option_group_use_name_prefix | Usa un prefijo de nombre para el grupo de opciones. | bool | false | no |
+  | major_engine_version | Versión principal del motor para el grupo de opciones. | string | 10.6 | no |
+  | options | Lista de opciones del grupo de opciones. | list | [] | no |
+  | option_group_description | Descripción del grupo de opciones. | string | null | yes |
+  | option_group_timeouts | Timeouts para las operaciones del grupo de opciones. | map | {} | no |
+  | db_option_group_tags | Etiquetas asignadas al grupo de opciones. | map | {} | no |
+  | option_group_skip_destroy | Si debe evitarse la destrucción del grupo de opciones. | bool | null | yes |
+  | create_db_instance | Indica si se debe crear la instancia de base de datos. | bool | true | no |
+  | engine_lifecycle_support | Soporte de ciclo de vida del motor de la base de datos. | string | null | yes |
+  | instance_class | Clase de instancia de la base de datos. | string | db.t3.micro | no |
+  | port | Puerto para la conexión a la base de datos. | int | 3306 | no |
+  | db_name | Nombre de la base de datos. | string | null | yes |
+  | vpc_security_group_ids | Lista de IDs de grupos de seguridad del VPC. | list | `[module.security_group_rds]` | no |
+  | network_type | Tipo de red para la base de datos. | string | null | yes |
+  | availability_zone | Zona de disponibilidad para la base de datos. | string | null | yes |
+  | multi_az | Habilitar multi-AZ para alta disponibilidad. | bool | false | no |
+  | kms_key_id | ID de la clave KMS para cifrado de la base de datos. | string | null | yes |
+  | ca_cert_identifier | Identificador del certificado CA para la base de datos. | string | null | yes |
+  | publicly_accessible | Indica si la base de datos es públicamente accesible. | bool | false | no |
+  | deletion_protection | Protección contra la eliminación de la base de datos. | bool | true | no |
+  | timeouts | Configuración de tiempos de espera para la base de datos. | map | {} | no |
+  | snapshot_identifier | Identificador del snapshot para restaurar la base de datos. | string | null | yes |
+  | db_instance_tags | Etiquetas asignadas a la instancia de base de datos. | map | {} | no |
+  | custom_iam_instance_profile | Perfil de instancia IAM personalizado. | string | null | yes |
+  | dedicated_log_volume | Indica si se debe crear un volumen dedicado para los logs de la base de datos. | bool | false | no |
+  | allocated_storage | Almacenamiento asignado para la base de datos. | int | 5 | no |
+  | max_allocated_storage | Almacenamiento máximo asignado para la base de datos. | int | 10 | no |
+  | storage_type | Tipo de almacenamiento (gp2, io1, etc.). | string | null | yes |
+  | iops | Número de IOPS asignados para almacenamiento. | int | null | yes |
+  | storage_throughput | Rendimiento de almacenamiento en MB/s. | int | null | yes |
+  | storage_encrypted | Indica si el almacenamiento está cifrado. | bool | true | no |
+  | upgrade_storage_config | Configuración para actualización de almacenamiento. | string | null | yes |
+  | iam_database_authentication_enabled | Habilitar autenticación IAM para la base de datos. | bool | false | no |
+  | domain | Dominio al que está asociado la base de datos. | string | null | yes |
+  | domain_auth_secret_arn | ARN del secreto de autenticación del dominio. | string | null | yes |
+  | domain_dns_ips | IPs DNS asociadas al dominio. | list | null | yes |
+  | domain_fqdn | FQDN (nombre de dominio completo) del dominio. | string | null | yes |
+  | domain_iam_role_name | Nombre del rol IAM asociado al dominio. | string | null | yes |
+  | domain_ou | Unidad organizativa (OU) del dominio. | string | null | yes |
+  | delete_automated_backups | Indica si se deben eliminar los backups automatizados. | bool | true | no |
+  | restore_to_point_in_time | Restaurar a un punto específico en el tiempo. | string | null | yes |
+  | final_snapshot_identifier_prefix | Prefijo para el identificador del snapshot final. | string | null | yes |
+  | skip_final_snapshot | Saltar la creación de snapshot final al eliminar la instancia. | bool | true | no |
+  | copy_tags_to_snapshot | Copiar etiquetas al snapshot al crearlo. | bool | true | no |
+  | maintenance_window | Ventana de mantenimiento para la instancia RDS. | string | "Sun:04:00-Sun:06:00" | no |
+  | allow_major_version_upgrade | Permitir la actualización de versión mayor del motor de base de datos. | bool | false | no |
+  | auto_minor_version_upgrade | Actualización automática de versiones menores. | bool | true | no |
+  | apply_immediately | Aplicar los cambios inmediatamente, si es posible. | bool | false | no |
+  | create_monitoring_role | Crear el rol de monitoreo para RDS. | bool | true | no |
+  | monitoring_role_arn | ARN del rol de monitoreo existente. | string | null | yes |
+  | monitoring_role_name | Nombre del rol de monitoreo. | string | `"${local.common_name}-rds-monitoring-${each.key}"` | no |
+  | monitoring_role_use_name_prefix | Usar prefijo para el nombre del rol de monitoreo. | bool | false | no |
+  | monitoring_role_description | Descripción del rol de monitoreo. | string | null | yes |
+  | monitoring_interval | Intervalo de monitoreo en segundos. | int | 0 | no |
+  | performance_insights_kms_key_id | KMS Key ID para Performance Insights. | string | null | yes |
+  | create_cloudwatch_log_group | Crear grupo de logs en CloudWatch. | bool | false | no |
+  | enabled_cloudwatch_logs_exports | Exportar logs a CloudWatch. | list | [] | no |
+  | cloudwatch_log_group_retention_in_days | Retención de logs en CloudWatch (días). | int | 7 | no |
+  | cloudwatch_log_group_kms_key_id | KMS Key ID para el grupo de logs en CloudWatch. | string | null | yes |
+  | monitoring_role_permissions_boundary | Límite de permisos para el rol de monitoreo. | string | null | yes |
+  | cloudwatch_log_group_skip_destroy | Omitir la destrucción del grupo de logs en CloudWatch. | bool | null | yes |
+  | cloudwatch_log_group_class | Clase del grupo de logs en CloudWatch. | string | null | yes |
+  | license_model | Modelo de licencia para bases de datos. | string | null | yes |
+  | timezone | Zona horaria para bases de datos SQL Server. | string | null | yes |
+  | replicate_source_db | Nombre de la instancia de origen para la replicación. | string | null | yes |
+  | replica_mode | Modo de réplica para la instancia de base de datos. | string | null | yes |
+  | character_set_name | Nombre del conjunto de caracteres de la base de datos. | string | null | yes |
+  | nchar_character_set_name | Nombre del conjunto de caracteres NCHAR de la base de datos. | string | null | yes |
+  | s3_import | Configuración de importación de datos desde S3 para MySQL. | string | null | yes |
+  | db_instance_role_associations | Asociaciones de roles de instancia de base de datos (por ejemplo, IAM). | map | {} | no |
