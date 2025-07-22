@@ -13,22 +13,28 @@
 Welcome to the Standard Platform — a suite of reusable and production-ready Terraform modules purpose-built for AWS environments.
 Each module encapsulates best practices, security configurations, and sensible defaults to simplify and standardize infrastructure provisioning across projects.
 
-## 📦 Module: Terraform RDS Module
-The Terraform wrapper for RDS simplifies the configuration of the Relational Database Service in the AWS cloud. This wrapper functions as a predefined template, facilitating the creation and management of RDS instances by handling all the technical details.
+## 📦 Module: Terraform ECS Service Module
+The Terraform Wrapper for ECS SERVICE is a comprehensive solution module for deploying containerized applications in the Amazon Elastic Container Service.
 
 ### ✨ Features
 
-- 🔐 [User and Database Management](#user-and-database-management) - Manages users, databases, and access with credential storage and notifications
+- 🔢 [Multiple Tasks](#multiple-tasks) - Supports multiple containers per service with shared Fargate resources
 
-- 💾 [Dump with S3](#dump-with-s3) - Creates SQL dump backups in S3 for MySQL, MariaDB, and PostgreSQL databases
+- 🔗 [Integration with ALB](#integration-with-alb) - Automates ALB target groups, listeners, and health checks
 
-- 💾 [Restore with S3](#restore-with-s3) - Restores database from SQL dump and runs cleanup scripts
+- 🔗 [Integration with Multiple ALB](#integration-with-multiple-alb) - Configures multiple ALBs on same/different ports with health checks
 
-- 🔄 [DB Reset](#db-reset) - Deletes and recreates database, supporting MySQL, MariaDB, and PostgreSQL
+- 🔗 [Integration with Service Discovery](#integration-with-service-discovery) - Supports integration with CloudMap / Service Discovery, automates integration.
 
-- 🌐 [DNS Record](#dns-record) - Registers a CNAME DNS record in a Route53 hosted zone
+- 🌐 [Integration with DNS](#integration-with-dns) - Automates DNS A record creation for ALB endpoints
 
-- 🕰️ [Enrollment of Point in Time Recovery](#enrollment-of-point-in-time-recovery) - Enables Point in Time Recovery backup policy integration
+- 🗂️ [Integration with EFS](#integration-with-efs) - Mounts EFS volumes for containers with external or project-level setup
+
+- 🗓️ [Scheduled Task Support](#scheduled-task-support) - Scheduled task execution based on cron schedule
+
+- 🔔 [Logs Notification](#logs-notification) - Configures log subscription filter to notify on non-INFO/DEBUG events
+
+- 🔔 [Alarm Notification](#alarm-notification) - Configures CPU/memory alarms and task restart alerts with SNS notifications
 
 
 
@@ -43,123 +49,142 @@ The Terraform wrapper for RDS simplifies the configuration of the Relational Dat
 
 ## 🚀 Quick Start
 ```hcl
-rds_parameters = {
-  ## Nombre y definición de una instancia RDS
-  "00" = {
-    
-    ## Definiciones para la creación del motor
-    engine                 = "mariadb"
-    engine_version         = "10.6.14"
-    instance_class         = "db.t3.micro"
-    deletion_protection    = true
-    publicly_accessible    = false
-    
-    ## Definición de subnets sobre las cuales se desplegará y accederá al motor
-    ## Definido por ids
-    subnet_ids             = data.aws_subnets.public.ids
-    ## Definido por nombre
-    # subnet_name = "${local.common_name_prefix}-db*" # Default: "${local.common_name_prefix}-private*"
-    
-    ## Reglas de acceso para el recurso
-    ingress_with_cidr_blocks = [
+ecs_service_parameters = {
+  ExSimple = {
+    # ecs_cluster_name                       = "dmc-prd-core-00"  # (Opcional) Auto Descubrimiento
+    # vpc_name                               = "dmc-prd"          # (Opcional) Auto Descubrimiento
+    # subnet_name                            = "dmc-prd-private*" # (Opcional) Auto Descubrimiento
+
+    enable_autoscaling = false
+    enable_execute_command = true   
+
+    # Policies que usan la tasks desde el codigo desarrollado
+    tasks_iam_role_policies = {
+      ReadOnlyAccess = "arn:aws:iam::aws:policy/ReadOnlyAccess"
+    }
+    tasks_iam_role_statements = [
       {
-        rule        = "mysql-tcp"
-        cidr_blocks = "172.1.0.0/16"
+        actions   = ["s3:List*"]
+        resources = ["arn:aws:s3:::*"]
       }
     ]
-    
-    ## Definición de tamaño y tipo de storage para el motor
-    allocated_storage     = 5
-    max_allocated_storage = 10
-    storage_type          = null
-    
-    ## Parametros que utilizara el motor
-    parameters = [
-      {
-        name  = "max_connections"
-        value = "150"
+    # Policies que usa el servicio para poder iniciar tasks (ecr / ssm / etc)
+    task_exec_iam_role_policies = {}
+    task_exec_iam_statements    = []
+
+    ecs_task_volume = []
+
+    containers = {
+      app = {
+
+        cloudwatch_log_group_retention_in_days = 7
+        readonlyRootFilesystem               = false
+
+        ports = {
+          "port1" = {
+            container_port = 80
+            # protocol       = "tcp" # Default: tcp
+            # cidr_blocks    = [""]  # Default: [vpc_cidr]
+            load_balancer = {
+              "alb1" = {
+                alb_name = "dmc-prd-core-external-00"
+                listener_rules = {
+                  "rule1" = {
+                    # priority          = 10
+                    # actions = [{ type = "forward" }] # Default Action
+                    conditions = [
+                      {
+                        host_headers = ["ExSimpleEcr.${local.zone_public}"]
+                      }
+                    ]
+                  }
+                }
+              }
+            }
+          }
+        }
+        map_environment = {
+          "ENV_1" = "env_value_1"
+          "ENV_1" = "env_value_2"
+        }
+        map_secrets = {
+          "SECRET_ENV_1" = "secret_env_value_1"
+          "SECRET_ENV_2" = "secret_env_value_2"
+        }
+        mount_points = []
       }
-    ]
-    ## Definiciones de ventanas de mantenimiento y backup
-    maintenance_window      = "Sun:04:00-Sun:06:00"
-    backup_window           = "03:00-03:30"
-    backup_retention_period = "7"
-    apply_immediately       = false
-    
-    ## Habilitación y retención de servicio de performance insights
-    #performance_insights_enabled           = false
-    #performance_insights_retention_period  = 7
+    }
   }
 }
-
-rds_defaults = var.rds_defaults
 ```
 
 
 ## 🔧 Additional Features Usage
 
-### User and Database Management
-Deploy lambda function, which manages the creation and modification of *Users*, *Databases*, and their access to them.
-The credentials for the accesses will be stored in a parameter of **Parameter Store**.
-Send notifications of the actions taken.
-Does not remove databases or users; the latter will remain without permissions on the resources.
+### Multiple Tasks
+The module supports starting more than one container for each service.<br/>
+This way, the serverless hardware that runs the containers (fargate) is shared.<br/>
+**IMPORTANT** two containers running in the same service can receive requests from the same load balancer, but it is a condition that the containers run on different ports.
 
 
-<details><summary>MySQL / MariaDB code</summary>
+<details><summary>Configuration Code</summary>
 
 ```hcl
-rds_parameters = {
-  "mysql" = {
-    ...
-    enable_db_management                    = true
-    enable_db_management_logs_notifications = true
-    db_management_parameters = {
-      databases = [
-        {
-          name    = "mydb1"
-          charset = "utf8mb4"
-          collate = "utf8mb4_general_ci"
-        },
-        {
-          name    = "mydb2"
-          charset = "utf8mb4"
-          collate = "utf8mb4_general_ci"
-        }
-      ],
-      users = [
-        {
-          username = "user1"
-          host     = "%"
-          password = "password1"
-          grants = [
-            {
-              database   = "mydb1"
-              table      = "*"
-              privileges = "ALL"
-            },
-            {
-              database   = "mydb2"
-              table      = "*"
-              privileges = "SELECT, UPDATE"
+ecs_service_parameters = {
+  ExDouble {
+    # ecs_cluster_name                       = "dmc-prd-core-00"
+    # vpc_name                               = "dmc-prd"
+    # subnet_name                            = "dmc-prd-private*"
+    enable_autoscaling = false
+
+    enable_execute_command = true
+
+    # Policies que usan la tasks desde el codigo desarrollado
+    tasks_iam_role_policies   = {}
+    tasks_iam_role_statements = []
+    # Policies que usa el servicio para poder iniciar tasks (ecr / ssm / etc)
+    task_exec_iam_role_policies = {}
+    task_exec_iam_statements    = []
+
+
+    containers = {
+      app = {
+        map_environment = {}
+        map_secrets     = {}
+        mount_points    = []
+        ports = {
+          "port1" = {
+            container_port = 80
+            load_balancer = {
+              "alb1" = {
+                alb_name = "dmc-prd-core-external-00"
+                listener_rules = {
+                  "rule1" = {
+                    # priority          = 10
+                    # actions = [{ type = "forward" }] # Default Action 
+                    conditions = [
+                      {
+                        host_headers = ["ExDoubleEcr.${local.zone_public}"]
+                      }
+                    ]
+                  }
+                }
+              }
             }
-          ]
-        },
-        {
-          username = "user2"
-          host     = "%"
-          password = "password2"
-          grants = [
-            {
-              database   = "mydb2"
-              table      = "*"
-              privileges = "ALL"
-            }
-          ]
+          }
         }
-      ],
-      excluded_users = ["rdsadmin", "root", "mariadb.sys", "healthcheck", "rds_superuser_role", "mysql.infoschema", "mysql.session", "mysql.sys"]
+      }
+      web = {
+        map_environment = {}
+        map_secrets     = {}
+        mount_points    = []
+        ports = {
+          "port1" = {
+            container_port = 81
+          }
+        }
+      }
     }
-    ...
   }
 }
 ```
@@ -167,79 +192,113 @@ rds_parameters = {
 
 </details>
 
-<details><summary>PostgreSQL code</summary>
+
+### Integration with ALB
+Supports integration with ALB, automates generation of target_groups and listener_rules.<br/>
+Also provides health_check features for the configured endpoints.
+
+
+<details><summary>Configuration Code</summary>
 
 ```hcl
-rds_parameters = {
-  "postgresql" = {
-    ...
-    enable_db_management                    = true
-    enable_db_management_logs_notifications = true
-    db_management_parameters = {
-      databases = [
-        {
-          "name" : "db1",
-          "owner" : "root",
-          "schemas" : [
-            {
-              "name" : "public",
-              "owner" : "root"
-            },
-            {
-              "name" : "schema1",
-              "owner" : "usr1"
+ecs_service_parameters = {
+  ExAlb = {
+    # ecs_cluster_name                       = "dmc-prd-core-00"
+    # vpc_name                               = "dmc-prd"
+    # subnet_name                            = "dmc-prd-private*"
+    enable_autoscaling                 = false
+
+    enable_execute_command = true
+
+    # Policies que usan la tasks desde el codigo desarrollado
+    tasks_iam_role_policies   = {}
+    tasks_iam_role_statements = []
+    # Policies que usa el servicio para poder iniciar tasks (ecr / ssm / etc)
+    task_exec_iam_role_policies = {}
+    task_exec_iam_statements    = []
+
+
+    ecs_task_volume = []
+
+    containers = {
+      app = {
+        image                 = "public.ecr.aws/docker/library/nginx:latest"
+        create_ecr_repository = false
+        ports = {
+          "port1" = {
+            container_port = 80
+            # host_port      = 80    # Default: container_port
+            # protocol       = "tcp" # Default: tcp
+            # cidr_blocks    = [""]  # Default: [vpc_cidr]
+            load_balancer = {
+              "alb1" = {
+                alb_name             = "dmc-prd-core-external-00"
+                alb_listener_port    = 443
+                deregistration_delay = 300
+                slow_start           = 30
+                health_check = {
+                  # # Default Values
+                  # path                = "/"
+                  # port                = "traffic-port"
+                  # protocol            = "HTTP"
+                  # matcher             = 200
+                  # interval            = 30
+                  # timeout             = 5
+                  # healthy_threshold   = 3
+                  # unhealthy_threshold = 3
+                }
+                listener_rules = {
+                  "rule1" = {
+                    # priority          = 10
+                    # actions = [{ type = "forward" }] # Default Action
+                    conditions = [
+                      {
+                        host_headers = ["ExAlb.${local.zone_public}"]
+                      }
+                    ]
+                  }
+                  # REDIRECT
+                  # curl -v -H 'Host: ExAlb-redirect.democorp.cloud' https://{balancer_domain}
+                  "rule2" = {
+                    # priority          = 10
+                    actions = [{
+                      type        = "redirect"
+                      host        = "google.com"
+                      port        = 443
+                      status_code = "HTTP_301"
+                    }]
+                    conditions = [
+                      {
+                        host_headers = ["ExAlb-redirect.${local.zone_public}"]
+                      }
+                    ]
+                  }
+                  # FIXED RESPONSE
+                  # curl -v -H 'Host: ExAlb-fixed.democorp.cloud' https://{balancer_domain}
+                  "rule3" = {
+                    # priority          = 10
+                    actions = [{
+                      type         = "fixed-response"
+                      message_body = "Unauthorized - Fixed Response"
+                      status_code  = 401
+                      content_type = "text/plain"
+                    }]
+                    conditions = [
+                      {
+                        host_headers = ["ExAlb-fixed.${local.zone_public}"]
+                      }
+                    ]
+                  }
+                }
+              }
             }
-          ]
-        },
-        {
-          "name" : "db2",
-          "owner" : "usr2",
-        },
-        {
-          "name" : "db3",
-          "owner" : "usr3",
+          }
         }
-      ],
-      roles = [
-        { "rolename" : "example_role_1" },
-        { "rolename" : "example_role_2" }
-      ],
-      users = [
-        {
-          "username" : "usr1",
-          "password" : "passwd1",
-          "grants" : [
-            {
-              "database" : "db1",
-              "schema" : "public",
-              "privileges" : "ALL PRIVILEGES",
-              "table" : "*"
-            }
-          ]
-        },
-        {
-          "username" : "usr2",
-          "password" : "passwd2",
-          "grants" : [
-            {
-              "privileges" : "example_role_1",
-              "options" : "WITH SET TRUE"
-            },
-            {
-              "privileges" : "example_role_2",
-              "options" : "WITH SET TRUE"
-            }
-          ]
-        },
-        {
-          "username" : "usr3",
-          "password" : "passwd3",
-          "grants" : []
-        }
-      ],
-      excluded_users = ["rdsadmin", "root", "healthcheck"]
+        map_environment = {}
+        map_secrets     = {}
+        mount_points    = []
+      }
     }
-    ...
   }
 }
 ```
@@ -248,26 +307,89 @@ rds_parameters = {
 </details>
 
 
-### Dump with S3
-This module creates the necessary resources to generate an SQL dump and store it in an S3 bucket, along with cleanup scripts for the database. <br/> It supports the database engines **MySQL**, **MariaDB**, and **PostgreSQL**.
+### Integration with Multiple ALB
+Supports integration with multiple ALBs configured to request multiple ALBs on the same port in the service or different ports, automates generation of target_groups and listener_rules.<br/>
+It also provides health_check features for the configured endpoints.
 
 
 <details><summary>Configuration Code</summary>
 
 ```hcl
-rds_parameters = {
-  "00" = {
-    ...
-    enable_db_dump_create = true
-    db_dump_create_local_path_custom_scripts = "${path.module}/content/custom_sql"
-    db_dump_create_schedule_expression = "cron(0 * * * ? *)"
-    db_dump_create_db_name = "demo"
-    db_dump_create_retention_in_days = 7
-    db_dump_create_s3_arn_permission_accounts = [
-      "arn:aws:iam::xxxxxxxxxxx:root", # demo.la-dev
-      "arn:aws:iam::xxxxxxxxxxx:root", # demo.la-stg
-    ]
-    ...
+ecs_service_parameters = {
+  ExAlbMulti = {
+    # ecs_cluster_name                       = "dmc-prd-core-00"
+    # vpc_name                               = "dmc-prd"
+    # subnet_name                            = "dmc-prd-private*"
+    enable_autoscaling                 = false
+
+    enable_execute_command = true
+
+    # Policies que usan la tasks desde el codigo desarrollado
+    tasks_iam_role_policies   = {}
+    tasks_iam_role_statements = []
+    # Policies que usa el servicio para poder iniciar tasks (ecr / ssm / etc)
+    task_exec_iam_role_policies = {}
+    task_exec_iam_statements    = []
+
+
+    ecs_task_volume = []
+
+    containers = {
+      app = {
+        image                 = "public.ecr.aws/docker/library/nginx:latest"
+        create_ecr_repository = false
+        ports = {
+          "port1" = {
+            container_port = 80
+            # protocol       = "tcp" # Default: tcp
+            # cidr_blocks    = [""]  # Default: [vpc_cidr]
+            load_balancer = {
+              "alb1" = {
+                alb_name          = "dmc-prd-core-external-00"
+                alb_listener_port = 443
+                dns_records = {
+                  "AlbMulti1" = {
+                    zone_name    = "${local.zone_public}"
+                    private_zone = false
+                  }
+                }
+                listener_rules = {
+                  "rule1" = {
+                    conditions = [
+                      {
+                        host_headers = ["AlbMulti1.${local.zone_public}"]
+                      }
+                    ]
+                  }
+                }
+              }
+              "alb2" = {
+                alb_name          = "dmc-prd-core-external-00" # Puede otro ALB / Internal por ejemplo
+                alb_listener_port = 443
+                dns_records = {
+                  "AlbMulti2" = {
+                    zone_name    = "${local.zone_public}"
+                    private_zone = false
+                  }
+                }
+                listener_rules = {
+                  "rule1" = {
+                    conditions = [
+                      {
+                        host_headers = ["AlbMulti2.${local.zone_public}"]
+                      }
+                    ]
+                  }
+                }
+              }
+            }
+          }
+        }
+        map_environment = {}
+        map_secrets     = {}
+        mount_points    = []
+      }
+    }
   }
 }
 ```
@@ -276,49 +398,51 @@ rds_parameters = {
 </details>
 
 
-### Restore with S3
-This module creates the necessary resources to perform a restore from an SQL dump stored in a bucket and execute the necessary cleanup scripts. <br/> It supports the database engines **MySQL**, **MariaDB**, and **PostgreSQL**
+### Integration with Service Discovery
+Supports integration with CloudMap / Service Discovery, automates integration.
 
 
 <details><summary>Configuration Code</summary>
 
 ```hcl
-enable_db_dump_restore = true
-db_dump_restore_s3_bucket_name = "demo-l04-core-00-db-dump-create"
-db_dump_restore_db_name = "demo"
-```
+ecs_service_parameters = {
+  ExCloudmap = {
+    # ecs_cluster_name                       = "dmc-prd-core-00"
+    # vpc_name                               = "dmc-prd"
+    # subnet_name                            = "dmc-prd-private*"
+    enable_autoscaling = false
+
+    enable_execute_command = true
+
+    # Policies que usan la tasks desde el codigo desarrollado
+    tasks_iam_role_policies   = {}
+    tasks_iam_role_statements = []
+    # Policies que usa el servicio para poder iniciar tasks (ecr / ssm / etc)
+    task_exec_iam_role_policies = {}
+    task_exec_iam_statements    = []
 
 
-</details>
+    ecs_task_volume = []
 
-
-### DB Reset
-This module deletes the database and recreates it, eliminating all data. It is intended to be used in development environments. <br/> It supports the database engines **MySQL**, **MariaDB**, and **PostgreSQL**.
-
-
-<details><summary>Configuration Code</summary>
-
-```hcl
-enable_db_reset = true
-```
-
-
-</details>
-
-
-### DNS Record
-Register a CNAME DNS record in a Route53 hosted zone that is present within the account, which can be public or private depending on the desired visibility type of the record.
-
-
-<details><summary>Configuration Code</summary>
-
-```hcl
-dns_records = {
-  "" = {
-    # zone_name    = local.zone_private
-    # private_zone = true
-    zone_name    = local.zone_public
-    private_zone = false
+    containers = {
+      app = {
+        image                 = "public.ecr.aws/docker/library/nginx:latest"
+        create_ecr_repository = false
+        map_environment       = {}
+        map_secrets           = {}
+        mount_points          = []
+        ports = {
+          "port1" = {
+            container_port = 80
+            # SOLO SE ADMITE UNO POR SERVICE
+            service_discovery = {
+              # record_name    = "" # Default: service_name
+              namespace_name = "project1.internal"
+            }
+          }
+        }
+      }
+    }
   }
 }
 ```
@@ -327,14 +451,373 @@ dns_records = {
 </details>
 
 
-### Enrollment of Point in Time Recovery
-This tag allows the resource to be added to a backup policy of the Point in Time Recovery type. It requires having the policy deployed with AWS Backups and the tag to be used.
+### Integration with DNS
+Supports integration with DNS Route53 + ALB<br/>
+Automates the generation of DNS A (Alias) records pointing to the assigned load balancer
 
 
 <details><summary>Configuration Code</summary>
 
 ```hcl
-tags = { ptr-14d = "true" }
+ecs_service_parameters = {
+  ExDns = {
+    enable_autoscaling                 = false
+
+    # Policies que usan la tasks desde el codigo desarrollado
+    tasks_iam_role_policies   = {}
+    tasks_iam_role_statements = []
+    # Policies que usa el servicio para poder iniciar tasks (ecr / ssm / etc)
+    task_exec_iam_role_policies = {}
+    task_exec_iam_statements    = []
+
+    ecs_task_volume = []
+
+    containers = {
+      app = {
+        image                 = "public.ecr.aws/docker/library/nginx:latest"
+        create_ecr_repository = false
+        ports = {
+          "port1" = {
+            container_port = 80
+            load_balancer = {
+              "alb1" = {
+                alb_name             = "dmc-prd-core-external-00"
+                alb_listener_port    = 443
+                dns_records = {
+                  "ExDns" = {
+                    zone_name    = "${local.zone_public}"
+                    private_zone = false
+                  }
+                }
+                listener_rules = {
+                  "rule1" = {
+                    conditions = [
+                      {
+                        host_headers = ["ExDns.${local.zone_public}"]
+                      }
+                    ]
+                  }
+                }
+              }
+            }
+          }
+        }
+        map_environment = {}
+        map_secrets     = {}
+        mount_points    = []
+      }
+    }
+  }
+}
+```
+
+
+</details>
+
+
+### Integration with EFS
+Subscribe to the containers to mount an EFS (Elastic File System / NFS) volume previously generated at the project level or externally (manually generated).
+
+
+<details><summary>Configuration Code</summary>
+
+```hcl
+ecs_service_parameters = {
+  ExEfs = {
+    # ecs_cluster_name               = "dmc-prd-core-00"
+    # vpc_name                       = "dmc-prd"
+    # subnet_name                    = "dmc-prd-private*"
+    enable_autoscaling = false
+
+    enable_execute_command = true
+
+    # Policies que usan la tasks desde el codigo desarrollado
+    tasks_iam_role_policies   = {}
+    tasks_iam_role_statements = []
+    # Policies que usa el servicio para poder iniciar tasks (ecr / ssm / etc)
+    task_exec_iam_role_policies = {}
+    task_exec_iam_statements    = []
+
+    ecs_task_volume_efs = {
+      root = {
+        efs_name     = "dmc-prd-example-00"
+        access_point = "root"
+      }
+      example = {
+        efs_name     = "dmc-prd-example-00"
+        access_point = "example"
+      }
+    }
+
+
+
+    # https://dmc-prd-core-external-00.democorp.cloud/filebrowser/files/
+    # admin / admin
+    containers = {
+      app = {
+        image                 = "hurlenko/filebrowser:latest"
+        create_ecr_repository = false
+
+        map_environment = {
+          "FB_BASEURL" = "/filebrowser"
+        }
+        map_secrets = {}
+        mount_points_efs = {
+          root = {
+            container_path = "/data/root"
+            read_only      = true
+          }
+          example = {
+            container_path = "/data/example"
+            read_only      = false
+          }
+        }
+        ports = {
+          "port1" = {
+            container_port = 8080
+            load_balancer = {
+              "alb1" = {
+                alb_name = "dmc-prd-core-external-00"
+                listener_rules = {
+                  "rule1" = {
+                    # priority          = 10
+                    # actions = [{ type = "forward" }] # Default Action
+                    conditions = [
+                      {
+                        path_patterns = [
+                          "/filebrowser",
+                          "/filebrowser/*",
+                        ]
+                      }
+                    ]
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}
+```
+
+
+</details>
+
+
+### Scheduled Task Support
+A task is configured that, instead of running as a service, runs based on a schedule (scheduler / cron).
+
+
+<details><summary>Configuration Code</summary>
+
+```hcl
+ecs_service_parameters = {
+  ExScheduler = {
+    enable_autoscaling        = false
+    ecs_execution_type        = "schedule"
+    schedule_expression       = "cron(0/5 * * * ? *)" # Run every 5 minutes
+    create_ecs_lambda_trigger = true
+
+    # Policies que usan la tasks desde el codigo desarrollado
+    tasks_iam_role_policies   = {}
+    tasks_iam_role_statements = []
+    # Policies que usa el servicio para poder iniciar tasks (ecr / ssm / etc)
+    task_exec_iam_role_policies = {}
+    task_exec_iam_statements    = []
+
+    containers = {
+      app = {
+        image                 = "public.ecr.aws/docker/library/alpine"
+        create_ecr_repository = false
+        command               = ["env"]
+      }
+    }
+  }
+}
+```
+
+
+</details>
+
+
+### Logs Notification
+The module generates a subscription filter on the log_group of the services and sends the events that meet the search pattern to the notification lambda function generated from the foundation level by **wrapper_notifications**.<br/><br/>
+Currently, it only searches in a Json log format and notifies if the severity of the event is different from "INFO" or "DEBUG". In the future, this will be configurable<br/>
+```
+Current Filter: "{ $.level != \"INFO\" && $.level != \"DEBUG\" }"
+
+```
+
+
+<details><summary>Configuration Code</summary>
+
+```hcl
+ecs_service_parameters = {
+  ExNotifications = {
+    ...
+    logs_notifications = true
+    # filter_pattern           = "\" \"" # Match everything
+    ...
+
+    containers = {
+      app = {
+        ...
+      }
+    }
+  }
+}
+```
+
+
+</details>
+
+
+### Alarm Notification
+The module allows the creation of alarms for CPU and Memory usage via cloudwatch and the creation of alarms by EventBridge to capture restarts of an ECS task. Both subscribe to an SNS for notification and also support changing any alarm value, disabling it, or creating a custom alarm.
+
+
+<details><summary>Configuration Code</summary>
+
+```hcl
+ecs_service_parameters = {
+    ExAlarms = {
+      # ecs_cluster_name                       = "dmc-prd-core-00"  # (Opcional) Auto Descubrimiento
+      # vpc_name                               = "dmc-prd"          # (Opcional) Auto Descubrimiento
+      # subnet_name                            = "dmc-prd-private*" # (Opcional) Auto Descubrimiento
+
+      enable_autoscaling     = false
+      enable_execute_command = true
+
+      # ALARMS CONFIGURATION
+      enable_alarms = true # Default: false
+      alarms_cw_overrides = {
+        # "warning-CPUUtilization" = {
+        #   "actions_enabled"    = true
+        #   "evaluation_periods" = 2
+        #   "threshold"          = 30
+        #   "period"             = 180
+        #   "treat_missing_data" = "ignore"
+        # }
+      }
+      alarms_cw_disabled = [
+        #"critical-CPUUtilization", "warning-MemoryUtilization"
+      ]
+      alarms_cw_custom = {
+        # "custom-CPUUtilization" = {
+        #   description = "is using more than 80% of CPU"
+        #   threshold   = 55 #0.000002
+        #   unit        = "Percent"
+        #   metric_name = "CPUUtilization"
+        #   statistic   = "Average"
+        #   namespace   = "AWS/ECS"
+        #   period      = 60
+        #   alarms_tags = {
+        #     "alarm-level"   = "CRIT"
+        #     "alarm-OU"      = "Paymets"
+        #     "alarm-urgency" = "immediate"
+        #   }
+        # }
+      }
+
+      # alarms_eb_disabled = ["ExAlarms-task-stopped"]
+
+      alarms_eb_overrides = {
+        # "ExAlarms-task-stopped" = {
+        #   #create_bus = true
+        #   event_pattern = jsonencode({
+        #     "source" : ["aws.ecs"],
+        #     "detail-type" : ["ECS Task State Change"],
+        #     "detail" : {
+        #       "group" : ["service:${local.common_name}-ExAlarms"]
+        #       "desiredStatus" : ["STOPPED"]
+        #     }
+        #   })
+        # }
+      }
+      alarms_eb_custom = {
+        # "fast-task-stopped" = {
+        #   create_bus = false
+        #   name       = "ecs-fast-stop"
+        #   description = "ECS Task Restart"
+        #   event_pattern = jsonencode({
+        #     "source" : ["aws.ecs"],
+        #     "detail-type" : ["ECS Task State Change"],
+        #     "detail" : {
+        #       "group" : ["service:${local.common_name}-ExAlarms"]
+        #       "lastStatus" : ["STOPPED"],
+        #       "$or" : [
+        #         {
+        #           "stoppedReason" : [{
+        #             "wildcard" : "*Error*"
+        #             }, {
+        #             "wildcard" : "*error*"
+        #             }, {
+        #             "wildcard" : "*Failed*"
+        #           }]
+        #         },
+        #         {
+        #           "containers" : {
+        #             "exitCode" : [{
+        #               "anything-but" : [0]
+        #             }]
+        #           }
+        #         }
+        #       ]
+        #     }
+        #   })
+        # }
+      }
+
+      # Policies que usan la tasks desde el codigo desarrollado
+      tasks_iam_role_policies = {
+        ReadOnlyAccess = "arn:aws:iam::aws:policy/ReadOnlyAccess"
+      }
+      tasks_iam_role_statements = [
+        {
+          actions   = ["s3:List*"]
+          resources = ["arn:aws:s3:::*"]
+        }
+      ]
+      # Policies que usa el servicio para poder iniciar tasks (ecr / ssm / etc)
+      task_exec_iam_role_policies = {}
+      task_exec_iam_statements    = []
+
+      ecs_task_volume = []
+
+      containers = {
+        app = {
+          image                 = "public.ecr.aws/docker/library/nginx:latest"
+          create_ecr_repository = false
+          map_environment       = {}
+          map_secrets           = {}
+          mount_points          = []
+          ports = {
+            "port1" = {
+              container_port = 80
+              load_balancer = {
+                "alb1" = {
+                  alb_name = "dmc-prd-core-external-00"
+                  listener_rules = {
+                    "rule1" = {
+                      # priority          = 10
+                      # actions = [{ type = "forward" }] # Default Action
+                      conditions = [
+                        {
+                          host_headers = ["ExAlarms.${local.zone_public}"]
+                        }
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+}
 ```
 
 
@@ -347,14 +830,6 @@ tags = { ptr-14d = "true" }
 
 
 
-
-
-## ⚠️ Important Notes
-- **🚨 Restart Engine on Parameter Group Changes:** Automatically restart the engine when parameter group changes are applied.
-- **🚨 Drop/Create Database:** Perform a drop and create operation on a database.
-- **⚠️ Expose Resource to Internet:** Ensure resource is publicly accessible to internet users.
-- **⚠️ Overwrite Database Data:** Allows overwriting data in a database.
-- **ℹ️ Unlimited Storage Growth Enabled:** Enables unlimited storage growth for the database instance.
 
 
 
